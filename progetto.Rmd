@@ -1,0 +1,965 @@
+---
+title: "Progetto Fondamenti"
+date: "`r Sys.Date()`"
+css: stileProgetto.css
+output:
+  rmdformats::readthedown:
+    highlight: kate
+---
+
+
+```{r setup, include=FALSE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=FALSE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+```
+
+
+
+PRIMA LE COSE RICAVATE DAI DATI DI ASCOLTO RICHIESTI DI SPOTIFY
+
+
+POI SUI BRANI SALVATI
+
+ALLA FINE COSE USANDO SPOTIFYR
+
+mi raccomanto, solo 10 minuti per la presentazione, massimo 12
+
+PER FONDAMENTI RICAVARE DA TUTTI I BRANI SALVATI IN LIBRERIA IL GENERE E DA LI FARCI UN GRAFICOOO!!!!!! impossibile
+
+che genere ascolto di più > circa fatto
+
+in che periodo (esempio inizio lockdown cosa ascoltavo) > si
+
+in che giorni ascolto di piu e in che ora > si
+
+cio che ascolto io vs cio che ascoltano gli altri in italia/mondo
+
+canzoni piu ascoltate in questo anno/ultimi mesi > DA METTERE?
+
+quante volte ho ascoltato una determinata canzone!!!
+il numero di volte > si
+
+COME I MIEI GUSTI SONO CAMBIATI NELLA MUSICA 
+1°: DA INIZIO A 24 MARZO 2020
+2°: DA 25 MARZO 2020 A ORA
+
+
+# Introduzione
+
+## Cosa è Spotify?
+
+parlare di Spotify?
+
+le mie domande?
+
+
+```{r logo, echo=FALSE, fig.cap="Spotify Logo", out.width = "50%"}
+knitr::include_graphics("img/spotifyLogo.png")
+```
+
+
+Spotify è un servizio musicale digitale (gratis o a pagamento) con il quale è semplice trovare la musica o il podcast giusto per ogni momento, su telefono, computer, tablet e altro ancora.
+
+Ci sono milioni di brani ed episodi su Spotify.
+Quindi, non importa cosa si stia facendo: quando si guida, ci si allena, si fa festa o ci si riposa, la musica e i podcast giusti sono sempre a portata di mano.
+
+Si possono sfogliare le raccolte di amici, artisti e celebrità o creare delle tue playlist personali per ogni mood.
+
+## Spotify Audio Analysis
+
+Ogni brano ha delle particolari caratteristiche che lo rendono unico:
+
+-   danceability: descrive quanto una canzone è adatta per ballare (0.0, 1.0)
+
+-   energy: rappresenta una misura percettiva di intensità e attività (le tracce energiche sono veloci e rumorose) (0.0, 1.0)
+
+-   valence: descrive la positività musicale trasmessa da un brano (alta valenza = più positive, bassa valenza = più negative) (0.0, 1.0)
+
+-   popularity: misura la popolarità del brano basandosi sul numero di riproduzioni di esso (0-100)
+
+-   acousticness: rappresenta l'acusticità di un brano, più si avvicina ad 1.0 più è acustico (0.0, 1.0)
+
+-   instrumentalness: misura se una traccia non contiene voci, cioè è strumentale; più si avvicina a 1.0, maggiore è la strumentalità (0.0, 1.0)
+
+-   explicit: se vero significa che la traccia contiene "brutte parole"
+
+
+```{r caricamento librerie, include=FALSE}
+#caricamento librerie
+library(jsonlite)
+library(lubridate)
+library(gghighlight)
+library(spotifyr)
+library(tidyverse)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(kableExtra)
+library(formattable)
+library(genius)
+library(fmsb)
+# carico get spotify authorization
+# ESTABLISH CONNECTION SPOTIFY API
+id = "00f22c2d4c35499bb29854c73ffdff97"
+id_secret = "46d59a3db5514cdd93c1de05365e57c8"
+#idVale = "bebf67dce2c54886b1171591e84eeb4b"
+#id_secretVale = "f7bdc08240ca4cacbe576181d472c2f8"
+Sys.setenv(SPOTIFY_CLIENT_ID = id)
+Sys.setenv(SPOTIFY_CLIENT_SECRET = id_secret)
+get_spotify_authorization_code()
+
+access_token <- get_spotify_access_token()
+```
+
+
+
+```{r lettura dataset e cambio nel giusto orario}
+#lettura dataset
+
+#GUIDE
+#https://towardsdatascience.com/explore-your-activity-on-spotify-with-r-and-spotifyr-how-to-analyze-and-visualize-your-stream-dee41cb63526
+#https://rpubs.com/womeimingzi11/how_my_spotify_looks_like
+
+
+streamHistory <- fromJSON("spotify_data/StreamingHistoryTotal.json", flatten = TRUE)
+myLibrary <- fromJSON("spotify_data/secondRequest/YourLibrary.json", flatten = TRUE)
+
+complete <- fromJSON("spotify_data/complete.json", flatten = TRUE)
+savedTracks <- myLibrary$tracks
+
+# cambiare ora!!! perchè orario di greenwitch
+#tz = a character string that specifies which time zone to parse the date with. The string must be a time zone that is #recognized by the user's OS.
+a <- ymd_hm(streamHistory$endTime, tz = "Etc/GMT+0")
+#cambio l'orario con quello del fuso di Roma
+streamHistory2 <- streamHistory %>%
+  mutate(endTime = with_tz(a, "Europe/Rome"))
+
+a <- ymd_hms(complete$ts, tz = "Etc/GMT+0")
+#cambio l'orario con quello del fuso di Roma
+complete <- complete %>%
+  mutate(ts = with_tz(a, "Europe/Rome")) %>%
+  arrange(ts)
+  
+complete <- complete %>%
+  rename(endTime = ts) %>%
+  rename(artistName = master_metadata_album_artist_name) %>%
+  rename(trackName = master_metadata_track_name) %>%
+  rename(msPlayed = ms_played) %>%
+  rename(albumName = master_metadata_album_album_name)
+
+completeTot <- complete %>%
+  select(endTime, artistName, trackName, albumName, msPlayed) %>%
+  arrange(endTime)
+
+
+```
+
+
+
+# Attività di ascolto per settimane e ore
+
+## In quali date ho ascoltato più o meno musica su Spotify?
+
+Questa è la prima domanda che mi è venuta in mente.
+Partendo dalle variabili si possono definire le ore, i minuti e i secondi, e sostanzialmente qualsiasi temporalità.
+Ho creato così un primo grafico per osservare il comportamento della mia attività su Spotify durante tutto l'anno, ad esempio a settimana.
+
+```{r ascolto per date}
+# ADDING DATE AND TIMING
+# prova con i secondi
+mySpotify = streamHistory2 %>% 
+  as_tibble() %>% #as_tibble() turns an existing object, such as a data frame or matrix, into a so-called tibble
+  mutate_at("endTime", ymd_hms) %>%  #aggiungo i secondi, cambio solo la colonna che si chiama "endTIme"
+  mutate(date = floor_date(endTime, "day") %>% as_date, seconds = msPlayed / 1000, minutes = seconds / 60) %>%
+  mutate(artistName = str_replace(artistName, "Sasha Sloan", "Sasha Alex Sloan"))
+# date -> prendo la data e basta senza orario, ricavo secondi e minuti suonati
+# floor_date prende un oggetto data-ora e lo arrotonda per difetto al valore intero più vicino dell'unità di tempo        specificata, nel mio caso per giorno
+
+mySpotify_2 = completeTot %>% 
+  as_tibble() %>% #as_tibble() turns an existing object, such as a data frame or matrix, into a so-called tibble
+  mutate_at("endTime", ymd_hms) %>%  #aggiungo i secondi, cambio solo la colonna che si chiama "endTIme"
+  mutate(date = floor_date(endTime, "day") %>% as_date, seconds = msPlayed / 1000, minutes = seconds / 60)
+
+#primo periodo
+oreStreamingUno = mySpotify_2 %>% 
+  filter(date <= "2020-03-24") %>% 
+  group_by(date) %>% 
+  group_by(date = floor_date(date, "week")) %>%  # raggruppo per settimane
+  summarize(ore = sum(minutes) / 60) %>%         # sommo i minuti di ogni settimana / 60 = ore
+  #verb summarise() riduce più valori fino a un singolo riassunto
+  arrange(date) %>%                              # metto in ordine di data crescente
+  ggplot(aes(x = date, y = ore)) + 
+  geom_col(aes(fill = ore)) +
+  scale_fill_gradient(low = "blue", high = "red") + 
+  ylim(0, 45)+
+  labs(x= "data", y= "ore di ascolto") + 
+  ggtitle("Attività di ascolto per settimana da marzo 2018 a marzo 2020- primo periodo")
+
+ggplotly(oreStreamingUno)
+```
+
+Si può notare come io non abbia usato molto Spotify all'inizio. Poi, dall'estate del 2019 ho iniziato ad usarlo come mia piattaforma principale musicale, abbonandomi alla versione premium che uso tutt'ora.
+
+
+```{r}
+#secondo periodo
+oreStreamingDue = mySpotify_2 %>% 
+  filter(date >= "2020-03-25") %>% 
+  group_by(date) %>% 
+  group_by(date = floor_date(date, "week")) %>%  # raggruppo per settimane
+  summarize(ore = sum(minutes) / 60) %>%         # sommo i minuti di ogni settimana / 60 = ore
+  #verb summarise() riduce più valori fino a un singolo riassunto
+  arrange(date) %>%                              # metto in ordine di data crescente
+  ggplot(aes(x = date, y = ore)) + 
+  geom_col(aes(fill = ore)) +
+  scale_fill_gradient(low = "blue", high = "red") + 
+  ylim(0, 45)+
+  labs(x= "data", y= "ore di ascolto") + 
+  ggtitle("Attività di ascolto per settimana da aprile 2020 a luglio 2021- secondo periodo")
+
+ggplotly(oreStreamingDue)
+```
+
+Si può notare come nelle settimane di quarantena e durante la sessione invernale (aprile/maggio 2020 - novembre/febbraio 2021) la mia attività di ascolto sia stata maggiore.
+
+Questo perchè essendo a casa la mia voglia di ascoltare musica aumenta! E trovo rilassante ascoltare musica durante lo studio.
+
+Fun fact: nel secondo grafico il picco maggiore di ore è 40, mentre nel primo è 25: dalla quarantena il mio utilizzo di Spotify è quasi raddoppiato!
+
+
+# Attività di ascolto per specifici artisti
+
+## In quali date ho ascoltato più o meno musica di un artista in particolare?
+
+Un'altra domanda a cui posso rispondere in modo molto semplice e visualizzare con un grafico a linee, ho evidenziato i risultati che stai cercando utilizzando la funzione "gghighlight" e tramite la variabile artistName.
+
+```{r}
+#primo periodo
+# metto tutti gli artisti così posso confrontare
+oreArtistaUno <- mySpotify_2 %>%
+  filter(date <= "2020-03-24") %>%
+  group_by(artistName, date = floor_date(date, "month")) %>%  # raggruppo per ascolto mensile
+  summarize(hours = sum(minutes) / 60) %>%                    # sommo i minuti di ogni settimana / 60 = ore
+  ggplot(aes(x = date, y = hours, group = artistName)) +
+  geom_line(aes(color = artistName)) +
+  geom_point(aes(color = artistName)) +
+  labs(x= "date", y= "ore di ascolto") + 
+  #ylim(0, 68)+
+  ggtitle("artisti: The Lumineers, Halsey, Vasco Rossi, Demi Lovato, FLETCHER, Khalid") +
+  gghighlight(artistName == "The Lumineers" || artistName == "Halsey" || artistName == "Vasco Rossi" || artistName == "Demi Lovato" || artistName == "FLETCHER" || artistName == "Khalid" || artistName == "Taylor Swift" || artistName == "Lana Del Rey" || artistName == "Chase Atlantic" || artistName == "Lorde" || artistName == "blink-182" || artistName == "Avril Lavigne" || artistName == "Sasha Alex Sloan")
+
+ggplotly(oreArtistaUno)
+```
+
+prima artista ascoltata Demi Lovato, è stata la mia prima artista preferita! Picco di quando ho scoperto i The Lumineers e Halsey.
+
+```{r ascolto artisti}
+#secondo periodo
+# metto tutti gli artisti così posso confrontare
+oreArtistaDue <- mySpotify_2 %>%
+  filter(date >= "2020-03-25") %>%
+  group_by(artistName, date = floor_date(date, "month")) %>%  # raggruppo per ascolto mensile
+  summarize(hours = sum(minutes) / 60) %>%                    # sommo i minuti di ogni settimana / 60 = ore
+  ggplot(aes(x = date, y = hours, group = artistName)) +
+  geom_line(aes(color = artistName)) +
+  geom_point(aes(color = artistName)) +
+  labs(x= "date", y= "ore di ascolto") + 
+  #ylim(0, 68)+
+  ggtitle("artisti: Taylor Swift, Lana Del Rey, Chase Atlantic, Lorde e blink-182") +
+  gghighlight(artistName == "Taylor Swift" || artistName == "Lana Del Rey" || artistName == "Chase Atlantic" || artistName == "Lorde" || artistName == "blink-182" || artistName == "Avril Lavigne" || artistName == "Sasha Alex Sloan" || artistName == "The Lumineers" || artistName == "Halsey" || artistName == "Vasco Rossi" || artistName == "Demi Lovato" || artistName == "FLETCHER" || artistName == "Khalid")
+
+ggplotly(oreArtistaDue)
+
+```
+
+picco di ascolto di Lana Del Rey durante la prima quarantena (marzo/aprile 2020) e di Taylor Swift a dicembre 2020/gennaio 2021, appena dopo l'uscita del suo ultimo album.
+
+Da notare come i miei gusti musicali in fatto di artisti sia completamente cambiato dopo la prima quarantena del 2020! Gli artisti che ascoltavo prima ora li ascolto poco e niente, uguale per quelli che ascolto ora.
+
+
+# Artisti più ascoltati (oltre 10 ore)
+
+## Quali sono stati gli artisti che ho ascoltato di più sul mio Spotify?
+
+Ho impostato un minimo di ore di riproduzione e per scoprire quali artisti ho ascoltato di più.
+Ad esempio, con più di 15 ore di ascolto.
+
+```{r}
+#primo periodo
+orePiuAscoltateUno <- mySpotify_2 %>% 
+  filter(date <= "2020-03-24") %>% 
+  group_by(artistName) %>% 
+  summarize(minutiAscoltati = sum(minutes), oreAscoltate = minutiAscoltati/60) %>% 
+  filter(minutiAscoltati >= 900) %>%
+  ggplot(aes(x = artistName, y = oreAscoltate, text = paste("artista: ", artistName, "<br>",
+                                           "ore ascoltate: ", round(oreAscoltate, digits = 0)))) + 
+  geom_col(aes(fill = oreAscoltate)) +
+  scale_fill_gradient(low = "blue", high = "red") + 
+  labs(x= "artista", y= "ore di ascolto") + 
+  ggtitle("Quali sono i miei artisti più ascoltati? (> 15 ore di ascolto) - primo periodo") +
+  theme(axis.text.x = element_text(angle = 90))
+
+ggplotly(orePiuAscoltateUno, tooltip=c("text"))
+```
+
+
+prima nessun artista spiccava, Halsey, The Lumineers, Khalid e FLETCHER erano i più ascoltati.
+
+```{r ascolto ore}
+#secondo periodo
+orePiuAscoltateDue <- mySpotify_2 %>% 
+  filter(date >= "2020-03-25") %>% 
+  group_by(artistName) %>% 
+  summarize(minutiAscoltati = sum(minutes), oreAscoltate = minutiAscoltati/60) %>% 
+  filter(minutiAscoltati >= 900) %>%
+  ggplot(aes(x = artistName, y = oreAscoltate, text = paste("artista: ", artistName, "<br>",
+                                           "ore ascoltate: ", round(oreAscoltate, digits = 0)))) + 
+  geom_col(aes(fill = oreAscoltate)) +
+  scale_fill_gradient(low = "blue", high = "red") + 
+  labs(x= "artista", y= "ore di ascolto") + 
+  ggtitle("Quali sono i miei artisti più ascoltati? (> 15 ore di ascolto) - secondo periodo") +
+  theme(axis.text.x = element_text(angle = 90))
+
+ggplotly(orePiuAscoltateDue, tooltip=c("text"))
+```
+
+In questo caso invece si nota come ci sia un picco di ascolto di Lana Del Rey e Taylor Swift, le quali superano gli altri artisti con un gran margine. Non a caso ora le reputo le mie artiste preferite!
+
+Fun fact: nel secondo grafico il picco maggiore di ore è più di 300, mentre nel primo è circa 50: 6 volte di più!!! Si nota ancora come io abbia usato molto di più Spotify durante la quarantena e soprattutto come siano cambiati gli artisti più ascoltati.
+
+
+# Attività di ascolto per data e ora del giorno
+
+## In che momento ho avuto la maggior parte dell'attività di riproduzione?
+
+Posso visualizzare per ora del giorno inclusa, il registro delle attività della mia cronologia completa con una mappa di calore, per osservare se questa abitudine è cambiata nel tempo.
+
+```{r ascolto date e giorni}
+#primo periodo
+timeDayUno <- mySpotify_2 %>% 
+  filter(date <= "2020-03-24") %>%
+  group_by(date, hour = hour(endTime)) %>%                  # raggruppo per data e ora
+  summarize(minutiAscoltati = sum(minutes)) %>%             # minuti ascoltati
+  ggplot(aes(x = hour, y = date, fill = minutiAscoltati)) + 
+  geom_tile() + 
+  labs(x= "Ora del giorno", y= "Data") + 
+  ggtitle("Quando c'è stata più attività di riproduzione sul mio Spotify?", "Attività per data e ora del giorno - primo periodo") +
+  scale_fill_gradient(low = "green", high = "blue", limits = c(0, 70))
+
+timeDayUno
+```
+
+Si nota come io abbia usato poco Spotify all’inizio; c’è stato qualche ascolto notturno ma soprattutto prima mattina (per il tragitto casa-scuola) e pomeriggio.
+
+```{r}
+#secondo periodo
+timeDayDue <- mySpotify_2 %>% 
+  filter(date >= "2020-03-25") %>%
+  group_by(date, hour = hour(endTime)) %>%                  # raggruppo per data e ora
+  summarize(minutiAscoltati = sum(minutes)) %>%             # minuti ascoltati
+  ggplot(aes(x = hour, y = date, fill = minutiAscoltati)) + 
+  geom_tile() + 
+  labs(x= "Ora del giorno", y= "Data") + 
+  ggtitle("Quando c'è stata più attività di riproduzione sul mio Spotify?", "Attività per data e ora del giorno - secondo periodo") +
+  scale_fill_gradient(low = "green", high = "blue", limits = c(0, 70))
+
+timeDayDue
+```
+
+
+Come ben immaginavo, la mia attività di ascolto si concentra di più nel pomeriggio e durante la sera/prime ore della notte.
+Anche durante la mattina ascolto musica (di meno), ad esempio nel tragitto casa-università.
+E' stata inoltre abbastanza simile anche durante l'estate, anche se più bassa.
+
+
+# Attività di ascolto per orario della giornata
+
+## A che ora del giorno ho ascoltato più musica?
+
+Ho anche creato un grafico a barre per dare un'occhiata più da vicino in dettaglio alle ore del giorno in cui c'è più ascolto.
+
+```{r ascolto nelle ore giorno}
+#primo periodo
+hoursDayUno = mySpotify_2 %>%
+  filter(date <= "2020-03-24") %>%
+  group_by(date, ora = hour(endTime), weekday = wday(date, label = TRUE))%>% #wday visual weekday as a string
+  summarize(minutiAscoltati = sum(minutes), oreAscoltate = minutiAscoltati/60)%>% 
+  ggplot(aes(x = ora, y = minutiAscoltati, group = date, text = paste("ora: ", ora, "<br>", "minuti ascoltati: ", round(minutiAscoltati, digits = 1), "<br>", "ore ascoltate: ", round(oreAscoltate, digits = 0)))) +
+  geom_col(fill = "#66b2ff") +
+  labs(x= "Ora del giorno", y= "Minuti di ascolto") + 
+  ggtitle("Attività da 0 a 23h - primo periodo")
+ 
+hoursDayUno
+```
+
+
+
+```{r}
+#secondo periodo
+hoursDayDue <- mySpotify_2 %>%
+  filter(date >= "2020-03-25") %>%
+  group_by(date, ora = hour(endTime), weekday = wday(date, label = TRUE))%>% #wday visual weekday as a string
+  summarize(minutiAscoltati = sum(minutes), oreAscoltate = minutiAscoltati/60) %>% 
+  ggplot(aes(x = ora, y = minutiAscoltati, group = date, text = paste("ora: ", ora, "<br>", "minuti ascoltati: ", round(minutiAscoltati, digits = 1), "<br>", "ore ascoltate: ", round(oreAscoltate, digits = 0)))) +
+  geom_col(fill = "#66b2ff") +
+  labs(x= "Ora del giorno", y= "Minuti di ascolto") + 
+  ggtitle("Attività da 0 a 23h - secondo periodo")
+
+hoursDayDue
+```
+
+Totale: la situazione è praticamente uguale in entrambi i grafici, l’unica grossa differenza è l’utilizzo elevato di Spotify alle 7/8 di mattina nel primo periodo (cioè prima della quarantena): lo usavo quando andavo a scuola!
+
+La mia attività di ascolto è quindi spalmata in tutto il giorno, soprattutto nel pomeriggio e tarda mattinata.
+
+
+
+
+# Attività di riproduzione per orario del giorno e giorno della settimana
+
+## In quali giorni della settimana ho più attività di ascolto?
+
+Ho risposto a questa domanda creando un'altra mappa di calore, visualizzando la relazione tra il giorno della settimana e l'ora del giorno.
+
+```{r}
+#primo periodo
+giornoUno <- mySpotify_2 %>%
+  filter(date <= "2020-03-24") %>% 
+  group_by(date, hour = hour(endTime), weekday = wday(date, label = TRUE)) %>%
+  summarize(minutesListened = sum(minutes))
+
+asd <- giornoUno %>% 
+  group_by(weekday, hour) %>% 
+  summarize(minutes = sum(minutesListened)) %>% 
+  ggplot(aes(x = hour, weekday, fill = minutes)) + 
+  geom_tile() + 
+  scale_fill_gradient(low = "green", high = "blue") +
+  labs(x= "Ora del giorno", y= "Giorno della settimana") + 
+  ggtitle("In quali giorni della settimana ho più attività di ascolto? - primo periodo") 
+ggplotly(asd)
+
+
+```
+
+
+```{r}
+#secondo periodo
+giornoDue <- mySpotify_2 %>%
+  filter(date >= "2020-03-25") %>% 
+  group_by(date, hour = hour(endTime), weekday = wday(date, label = TRUE)) %>%
+  summarize(minutesListened = sum(minutes))
+
+asdf <- giornoDue %>% 
+  group_by(weekday, hour) %>% 
+  summarize(minutes = sum(minutesListened)) %>% 
+  ggplot(aes(x = hour, weekday, fill = minutes)) + 
+  geom_tile() + 
+  scale_fill_gradient(low = "green", high = "blue") +
+  labs(x= "Ora del giorno", y= "Giorno della settimana") + 
+  ggtitle("In quali giorni della settimana ho più attività di ascolto? - secondo periodo") 
+ggplotly(asdf)
+```
+
+
+Con questo grafico sono in grado di capire in quali giorni della settimana ho una maggiore attività: osservo chiaramente che in tutti i giorni ascolto abbastanza musica ma durante il sabato e la domenica ci sono dei picchi maggiori di ascolto (zone blu).
+
+Per avere più certezza della mia ipotesi creo un grafico a linee.
+
+## Attività di riproduzione per orario del giorno e giorno della settimana - grafico a linee
+
+```{r}
+#primo periodo
+weekDayUno <- giornoUno %>% 
+  group_by(weekday, hour) %>% 
+  summarize(minutes = sum(minutesListened)) %>% 
+  ggplot(aes(x = hour, y = minutes, color = weekday)) + 
+  geom_line() +
+  labs(x= "Ora del giorno", y= "Minuti di ascolto") + 
+  ggtitle("In quale giorno della settimana e ora del giorno ho ascoltato più musica?", "Line chart - primo periodo") 
+weekDayUno
+```
+
+Come avevo ipotizzato prima, si vede che il lunedì e il martedì hanno un picco più alto rispetto agli altri giorni nel pomeriggio. La giornata con meno ascolto pare proprio che sia il sabato.
+
+
+```{r}
+#secondo periodo
+weekDayDue <- giornoDue %>% 
+  group_by(weekday, hour) %>% 
+  summarize(minutes = sum(minutesListened)) %>% 
+  ggplot(aes(x = hour, y = minutes, color = weekday)) + 
+  geom_line() +
+  labs(x= "Ora del giorno", y= "Minuti di ascolto") + 
+  ggtitle("In quale giorno della settimana e ora del giorno ho ascoltato più musica?", "Line chart - secondo periodo") 
+weekDayDue
+```
+
+Invece qui posso notare che complessivamente sabato e domenica sono stati i giorni in cui ho ascoltato più musica.
+
+È pazzesco come la linea tracciata sia simile per tutti i giorni della settimana e come il picco delle 7 di mattina sia scomparso; non andando più a scuola per via della quarantena non utilizzavo Spotify di prima mattina.
+
+
+```{r aggiunta canzoni Lorde}
+# aggiungo ultime canzoni di Lorde a mano
+savedTracks = savedTracks %>%
+  add_row(artist = "Lorde", album = "Pure Heroine", track = "Buzzcut Season", uri = "spotify:track:3ShTaJBCOclymogQNzPde7") %>%
+  add_row(artist = "Lorde", album = "Pure Heroine", track = "Glory And Gore", uri = "spotify:track:0SK9wxN40P6jlcMfTSAe0V") %>%
+  add_row(artist = "Lorde", album = "Pure Heroine", track = "Still Sane", uri = "spotify:track:0t1D6NQt3uhZnam0yg8Wv3") %>%
+  add_row(artist = "Lorde", album = "Pure Heroine", track = "White Teeth Teens", uri = "spotify:track:15LzvCtoJWwsrTWJMWUTOv") %>%
+  add_row(artist = "Lorde", album = "Pure Heroine", track = "A World Alone", uri = "spotify:track:2HLnzsXJ3mD9UWAa3RY89n") %>%
+  add_row(artist = "Lorde", album = "Pure Heroine", track = "Bravado", uri = "spotify:track:02ZorlDGq0uTnMobHNh4EL") %>%
+  add_row(artist = "Lorde", album = "Pure Heroine", track = "Million DOllar Bills", uri = "spotify:track:3Lw7lWTJlcqlx8E9HFmByr") %>%
+  add_row(artist = "Lorde", album = "Pure Heroine", track = "The Love Club", uri = "spotify:track:2yrJ1jWo3HLksJFUqUsZE4") %>%
+  add_row(artist = "Lorde", album = "Pure Heroine", track = "Biting Down", uri = "spotify:track:45UvXCltvMpEPNLGzG0NYk") %>%
+  add_row(artist = "Lorde", album = "Pure Heroine", track = "Swingin Party", uri = "spotify:track:7otV7kSzDMo11qLlw8pAtr") %>%
+  add_row(artist = "Lorde", album = "The Hunger Games: Mockingjay Pt.1 (Original Motion Picture Soundtrack)", track = "Meltdown", uri = "spotify:track:27qvbQ10N5uoqXvYT9MqZt") %>%
+  add_row(artist = "Lorde", album = "Caracal (Deluxe)", track = "Magnets", uri = "spotify:track:7nRmfGNhHKEEu5o8yFXLXt") %>%
+  add_row(artist = "Lorde", album = "MTV Unplugged", track = "Don't Take The Money", uri = "spotify:track:25wTebB8ECapFHWRPywpYR") %>%
+  add_row(artist = "Lorde", album = "Alternate Worlds", track = "Easy", uri = "spotify:track:0rkqMaZsWZzfdz4brrhS14") %>%
+  add_row(artist = "Lorde", album = "The Hunger Games: Mockingjay Pt.1 (Original Motion Picture Soundtrack)", track = "Yellow Flicker Beat", uri = "spotify:track:0HVINS0AfIuck7csStOEHP")
+```
+
+
+# Dataframe con le mie canzoni salvate nella libreria
+
+Oltre a tutte le canzoni che ho riprodotto è presente anche un file con le canzoni che ho salvato nella libreria nel momento della richiesta dei dati.
+
+## Top artisti basato sulle canzoni salvate
+
+```{r top artisti}
+topArtistFromSavedTracks = savedTracks %>%
+  group_by(artist) %>%
+  count(artist) %>%
+  arrange(-n)
+
+green <- "#1ed760"
+yellow <- "#e7e247"
+pink <- "#ff6f59"
+blue <- "#17bebb"
+  
+  # top artisti basato sulle canzoni salvate
+plotMyFavs <- topArtistFromSavedTracks %>%
+  filter(n >= 11) %>%
+  mutate(freq = case_when(n > 100 ~ '> 100 brani',
+      between(n, 50, 99) ~ '50-99 brani',
+      between(n, 20, 49) ~ '20-49 brani',
+      TRUE ~ '< 20 brani')) %>%
+  mutate(freq = factor(freq, levels = c('> 100 brani', '50-99 brani', '20-49 brani', '< 20 brani'))) %>%
+  ggplot(mapping = aes(x = reorder(artist, -n), y = n, fill = freq, , text = paste("artista: ", artist, "<br>", "n canzoni : ", n))) +
+  geom_col() +
+  scale_fill_manual(values=c(green, yellow, pink, blue)) +
+  labs(x= "Artista", y= "Numero di canzoni", fill = NULL) +
+  ggtitle("Top artisti basato sulle canzoni salvate nella mia libreria") +
+  theme(axis.text.x = element_text(angle = -60),
+        axis.title = element_text(face = 'bold'),
+        plot.title = element_text(hjust = 0.5, face = 'bold', size = 15),
+        plot.caption = element_text(hjust = 1,face = 'bold.italic'))
+ggplotly(plotMyFavs, tooltip=c("text"))
+#taylor complete collection: 267 brani
+#lana comlete collection: 107 brani
+```
+
+taylor complete collection: 267 brani
+
+lana complete collection: 107 brani
+
+CHE SCRIVO?
+
+
+## Quali sono le canzoni che ho ascoltato più volte dall'inizio? (>= 80 riproduzioni)
+
+```{r}
+#mostStreamedSongs = streamHistory2 %>%
+mostStreamedSongs = completeTot %>%
+  filter(msPlayed >= 50000, endTime >= "2019-01-01 00:00:00") %>% #50 secondi
+  group_by(trackName, artistName) %>%
+  count(trackName) %>%
+  arrange(-n) %>%
+  filter(n >= 80)
+
+mostStreamedArtist = mostStreamedSongs %>%
+  group_by(artistName) %>%
+  count(artistName) %>%
+  arrange(-n)
+
+#provo grafico, nei 2 assi n volte e titolo brano, colore artista
+#n come colore?
+#y frequenza e x top 50
+#x artista, y numerosità
+
+p <- mostStreamedSongs %>%
+  ggplot(aes(x = reorder(trackName, -n), y = n, fill = artistName, text = paste("track Name: ", trackName, "<br>", "artist: ", artistName, "<br>", "n: ", n))) +
+  geom_col() +
+  ggtitle("Le mie canzoni più ascoltate dall'inizio! (> 80 volte)")+
+  theme(axis.text.x = element_blank())+
+  labs(x= "tracce", y= "n")
+
+
+ggplotly(p, tooltip=c("text"))
+```
+
+Le canzoni che ho ascoltato di più dall'inizio: maggior parte di Lana, vari artisti spalmati; primi posti occupati da Khalid e Halsey
+
+Le canzoni che ho ascoltato di più da aprile 2020 a luglio 2021 sono di Lana Del Rey, ce ne sono ben 12 (quella con più ascolti ne ha ben 143). Nel mezzo è presente anche un' altra canzone, una collaborazione tra Anne-Marie e Sam Fisher. Una canzone specifica di Taylor Swift, august, l'ho ascoltata per ben 100 volte! (ed è uscita l'anno scorso!)
+
+CHE SCRIVO?
+
+# Spotify API e spotifyr
+
+## trova le MIE ultime 5 canzoni ascoltate!
+
+Con delle speciali API (Application Programming Interface) messe a disposizione da Spotify ed una libreria per R chiamata "spotifyr" si riescono ad avere molte altre informazioni riguardo al proprio account.
+
+(La prima cosa che devi fare per poter iniziare a consumare tali dati tramite “spotifyr” è stabilire una connessione dalla tua applicazione in R. Per questo devi ottenere principalmente due parametri: SPOTIFY_CLIENT_ID e SPOTIFY_CLIENT_SECRET. Questi sono ottenuti dal portale Spotify per sviluppatori, creando una nuova applicazione su https://developer.spotify.com/dashboard/applications dove ti verrà chiesto di accedere con le stesse credenziali del tuo account Spotify.)
+
+Un esempio molto semplice, le mie ultime 5 canzoni riprodotte!
+```{r}
+get_my_recently_played(limit = 5) %>% 
+    mutate(artist.name = map_chr(track.artists, function(x) x$name[1]),
+           played_at = as_datetime(played_at)) %>% 
+    select(track.name, artist.name, track.album.name, played_at) %>% 
+    kable() #funzione di knitr per creare tabelle
+
+```
+
+## artisti più ascoltati long term
+
+```{r}
+genereLong50 = get_my_top_artists_or_tracks(type = 'artists', time_range = 'long_term', limit = 50) %>%
+    select(name, genres, popularity, followers.total) %>% 
+    rowwise %>% 
+    mutate(genres = paste(genres, collapse = ', ')) %>% 
+    ungroup
+#tolgo cose inutili
+#write.csv(genereLong50,"genereLong50_2.csv", row.names = FALSE)
+#riprendo dataframe
+genereLong50Mod <- read.csv("genereLongg.csv")
+
+top50 <- genereLong50Mod %>%
+  ggplot(aes(x = popularity, y = followers.total, colour = name, genres = genres)) +
+  geom_point()
+
+
+#ggplotly(top50, tooltip = c("x", "y", "colour", "genres"))
+```
+
+
+
+## Quadrante emotivo dei miei artisti più ascoltati nell'ultimo mese
+
+QUESTO LO METTO DI SICURO
+
+ricavo, con una specifica funzione di spotifyr e le api, i miei artisti più ascoltati nell'ultimo mese e confronto le loro canzoni
+
+```{r}
+shortTermArtists <- get_my_top_artists_or_tracks(type = 'artists', time_range = 'short_term', limit = 8) %>%
+  select(name, genres, popularity) %>% 
+    rowwise %>% 
+    mutate(genres = paste(genres, collapse = ', ')) %>% 
+    ungroup
+shortTermArtists
+```
+
+
+
+```{r}
+# GET FEATURES TOP FIVE FAVORITE ARTISTS
+favArtist1 <- get_artist_audio_features(artist= "Taylor Swift")
+favArtist2 <- get_artist_audio_features(artist= "Lorde", include_groups = c("album", "single"))
+favArtist3 <- get_artist_audio_features(artist= "Lana Del Rey")
+favArtist4 <- get_artist_audio_features(artist= "Tove Lo")
+favArtist5 <- get_artist_audio_features(artist= "Sasha Alex Sloan", include_groups = c("album", "single", "appears_on"))
+favArtist6 <- get_artist_audio_features(artist= "Avril Lavigne")
+favArtist7 <- get_artist_audio_features(artist= "Chase Atlantic", include_groups = c("album", "single"))
+favArtist8 <- get_artist_audio_features(artist= "HAIM", include_groups = c("album", "appears_on"))
+
+#favArtist3 <- get_artist_audio_features(artist= "Demi Lovato")
+
+
+#CAMBIARE E TOGLIERE GLI ALBUM INUTILI!!! TENERE SOLO QUELLI IMPORTANTI
+#prendo solo gli album utili per tay
+favArtist1 <- favArtist1[which(favArtist1$album_name %in% c("1989 (Deluxe)","evermore (deluxe version)", "Fearless (Platinum Edition)", "Fearless (Taylor's Version)", "folklore (deluxe version)", "Lover", "Red (Deluxe Edition)", "reputation", "Speak Now (Deluxe Package)", "Taylor Swift")),]
+
+#prendo le canzoni uniche, non ripetute
+favArtist1 <- favArtist1 %>%
+  distinct(track_name, .keep_all = TRUE)
+
+#prendo solo gli album utili per lorde
+favArtist2 <- favArtist2[which(favArtist2$album_name %in% c("Solar Power", "Melodrama", "Pure Heroine (Extended)", "Yellow Flicker Beat (From The Hunger Games: Mockingjay Part 1)")),]
+
+#prendo le canzoni uniche, non ripetute
+favArtist2 <- favArtist2 %>%
+  distinct(track_name, .keep_all = TRUE)
+
+#prendo solo gli album utili per lana
+favArtist3 <- favArtist3[which(favArtist3$album_name %in% c("Born To Die – Paradise Edition (Special Version)", "Chemtrails Over The Country Club", "Honeymoon", "Lust For Life", "Norman Fucking Rockwell!", "Ultraviolence (Deluxe)")),]
+
+#prendo le canzoni uniche, non ripetute
+favArtist3 <- favArtist3 %>%
+  distinct(track_name, .keep_all = TRUE) # per tenere anche le altre colonne, di default tiene solo track_name
+
+#prendo solo gli album utili per tove lo
+favArtist4 <- favArtist4[which(favArtist4$album_name %in% c("Sunshine Kitty", "BLUE LIPS (lady wood phase II)", "Lady Wood", "Queen Of The Clouds")),]
+
+#prendo le canzoni uniche, non ripetute
+favArtist4 <- favArtist4 %>%
+  distinct(track_name, .keep_all = TRUE)
+
+#prendo solo gli album utili per sasha sloan
+favArtist5 <- favArtist5[which(favArtist5$album_name %in% c("Only Child", "Love Runs Out (feat. G-Eazy & Sasha Alex Sloan)", "barcelona", "when was it over? (feat. Sam Hunt)", "Self Portrait", "Loser", "sad girl")),]
+
+#prendo le canzoni uniche, non ripetute
+favArtist5 <- favArtist5 %>%
+  distinct(track_name, .keep_all = TRUE)
+
+
+#avril è okay ma prendo le canzoni uniche
+favArtist6 <- favArtist6 %>%
+  distinct(track_name, .keep_all = TRUE)
+
+#prendo solo gli album utili per i chase atlantic
+favArtist7 <- favArtist7[which(favArtist7$album_name %in% c("Dalliance", "Nostalgia", "Paradise EP", "Part One", "Self Portrait", "Part Two", "Part Three", "DON'T TRY THIS", "Chase Atlantic", "hurts 2 hate somebody (with Chase Atlantic & No Rome)", "PHASES", "BEAUTY IN DEATH")),]
+
+#prendo le canzoni uniche, non ripetute
+favArtist7 <- favArtist7 %>%
+  distinct(track_name, .keep_all = TRUE)
+
+#prendo solo gli album utili per le HAIM
+favArtist8 <- favArtist8[which(favArtist8$album_name %in% c("Women In Music Pt III (Expanded Edition)", "Something to Tell You", "Days Are Gone (Deluxe Edition)")),]
+
+#prendo le canzoni uniche, non ripetute
+favArtist8 <- favArtist8 %>%
+  distinct(track_name, .keep_all = TRUE)
+
+
+# creo un unico df
+topFiveArtists <- rbind(favArtist1, favArtist2, favArtist3, favArtist4, favArtist5, favArtist6, favArtist7, favArtist8)
+
+emotionalQuadrant <- ggplot(data = topFiveArtists, aes(x = valence, y = energy, color = artist_name)) +
+  geom_jitter(aes(text = track_name)) +
+  geom_vline(xintercept = 0.5) + #righe per dividere in 4
+  geom_hline(yintercept = 0.5) +
+  scale_x_continuous(expand = c(0, 0), limits = c(0, 1)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
+  annotate('text', 0.17, 0.95, label = "Arrabbiato / Turbolento") +
+  annotate('text', 1.75 / 2, 0.95, label = "Gioioso / Felice") +
+  annotate('text', 1.75 / 2, 0.05, label = "Pacifico / Tranquillo") +
+  annotate('text', 0.25 / 2, 0.05, label = "Deprimente / Triste") +
+  labs(x= "Valence", y= "Energy") +
+  ggtitle("Quadrante emotivo dei miei artisti più ascoltati nell'ultimo mese")  
+ggplotly(emotionalQuadrant)
+```
+
+taylor: spalmato dappertutto
+
+lana: maggior parte tristi e turbolente
+
+lorde: maggior parte tristi
+
+chase atlantic: maggior parte turbolente, tutte con tanta energia
+
+avril: tutte con tanta energia
+
+haim: maggior parte gioiose/felici
+
+sasha sloan: maggior parte tristi
+
+tove lo: maggior parte con tanta energia
+
+
+
+## Generi più ascoltati nell'ultimo mese
+
+```{r}
+# trova i MIEI artisti più ascoltati ultimamente
+#genereShort = get_my_top_artists_or_tracks(type = 'artists', time_range = 'short_term') %>%
+#    select(name, genres, popularity, followers.total) %>% 
+#    rowwise %>% 
+#    mutate(genres = paste(genres, collapse = ', ')) %>% 
+#    ungroup
+
+
+#mi copio la tabella perhcè viene modificata!
+#write.csv(genereShort,"genereShort.csv", row.names = FALSE)
+
+genereShort <- read.csv("genereShort.csv")
+
+# GRAFICO GENERI TOP ARTISTI!!!
+#modifico la tabella
+genereShort$pop = 0              #5
+genereShort$postTeen.pop = 0     #6
+genereShort$art.pop = 0          #7
+genereShort$dance.pop = 0        #8
+genereShort$electropop = 0       #9
+genereShort$indie.pop = 0        #10
+genereShort$uk.pop = 0           #11
+genereShort$modern.rock = 0      #12
+genereShort$pop.rock = 0         #13
+genereShort$pop.rap = 0          #14
+genereShort$RandB = 0            #15
+genereShort$punk = 0             #16
+
+# assegno ad ogni artista il genere esatto
+#Tay
+genereShort[1,5] = 1
+genereShort[1,6] = 1
+#Lorde
+genereShort[2,7] = 1
+genereShort[2,8] = 1
+genereShort[2,9] = 1
+genereShort[2,5] = 1
+genereShort[2,6] = 1
+#Sasha Sloan
+genereShort[3,9] = 1
+genereShort[3,10] = 1
+genereShort[3,5] = 1
+genereShort[3,6] = 1
+#OLIVIA
+genereShort[4,5] = 1
+#TOVE LO
+genereShort[5,8] = 1
+genereShort[5,9] = 1
+genereShort[5,5] = 1
+genereShort[5,6] = 1
+genereShort[5,14] = 1
+#LANA
+genereShort[6,7] = 1
+genereShort[6,5] = 1
+#ANNE MARIE
+genereShort[7,8] = 1
+genereShort[7,5] = 1
+genereShort[7,6] = 1
+genereShort[7,11] = 1
+#CHASE ATLANTIC
+genereShort[8,12] = 1
+genereShort[8,5] = 1
+#AVRIL
+genereShort[9,5] = 1
+genereShort[9,6] = 1
+genereShort[9,8] = 1
+#HAIM
+genereShort[10,7] = 1
+genereShort[10,8] = 1
+genereShort[10,10] = 1
+genereShort[10,13] = 1
+#BILLIE
+genereShort[11,9] = 1
+genereShort[11,5] = 1
+#Demi Lovato
+genereShort[12,5] = 1
+genereShort[12,6] = 1
+genereShort[12,8] = 1
+#Dua Lipa
+genereShort[13,8] = 1
+genereShort[13,5] = 1
+genereShort[13,11] = 1
+#Sleeping At Last
+genereShort[14,5] = 1
+genereShort[14,10] = 1
+genereShort[14,13] = 1
+#FLETCHER
+genereShort[15,8] = 1
+genereShort[15,9] = 1
+genereShort[15,5] = 1
+genereShort[15,6] = 1
+genereShort[15,10] = 1
+#THE WEEKND
+genereShort[16,5] = 1
+genereShort[16,15] = 1
+#Halsey
+genereShort[17,8] = 1
+genereShort[17,9] = 1
+genereShort[17,5] = 1
+genereShort[17,6] = 1
+genereShort[17,10] = 1
+#Rita Ora
+genereShort[18,8] = 1
+genereShort[18,9] = 1
+genereShort[18,14] = 1
+genereShort[18,6] = 1
+genereShort[18,11] = 1
+#BLINK 182
+genereShort[19,16] = 1
+#KHALID
+genereShort[20,5] = 1
+
+
+#creo un nuovo dataframe per fare un grafico sui generi più ascoltati recentemente
+nome <- c("pop", "post-teen pop", "art pop", "dance pop", "electropop", "indie pop", "uk pop", "modern rock", "pop rock", "pop rap", "r&b", "punk")
+tot <- c(17, 10, 3, 10, 7, 5, 3, 1, 2, 2, 1, 1)
+
+gen <- data.frame(nome, tot)
+
+# farlo direttamente con plotly perchè con ggplot2 non va poi
+
+generi <- plot_ly(gen, labels = ~nome, values = ~tot, type = 'pie')
+generi <- generi %>% layout(title = 'Generi più riprodotti ultimamente',
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+generi
+
+#netta maggioranza per il pop ma è presente anche rock e punk!
+
+```
+
+Sono presenti molte sfumature del pop, il quale è palesemente il mio genere più ascoltato ultimanente. A seguire rock e punk.
+
+Pop music basically popular music so, it has many types depending upon location
+
+CAPIRE LE DIFFERENZE TRA I DIVERSI POP
+
+# playlist july
+```{r}
+# GET SPECIFIC PLAYLIST FEATURES
+playlist_username <- 'VII/MMXXI july'
+playlist_uris <- c('5jWdr5QCwbEi7mxO7cTAGh')
+playlistJuly <- get_playlist_audio_features(playlist_username, playlist_uris)
+```
+
+
+
+## tolgo dati inutili dal df e aggiungo nome artista
+```{r}
+playlistJuly = playlistJuly %>%
+  select(track.name, track.artists, track.album.name, danceability, energy, key, loudness, speechiness, acousticness, instrumentalness, liveness, valence, tempo, track.popularity, track.album.name, track.album.release_date, track.explicit) %>%
+  mutate(track.artists = map_chr(track.artists, function(x) x$name[1]))
+playlistJuly$playlist_name <- 'VII/MMXXI july'
+```
+
+
+```{r}
+p = ggplot(data = playlistJuly, aes(x = valence, y = energy, color = track.artists)) +
+  geom_jitter(aes(text = track.name)) +
+  geom_vline(xintercept = 0.5) +
+  geom_hline(yintercept = 0.5) +
+  scale_x_continuous(expand = c(0, 0), limits = c(0, 1)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
+  annotate('text', 0.25 / 2, 0.95, label = "Turbulent/Angry", fontface =
+             "bold") +
+  annotate('text', 1.75 / 2, 0.95, label = "Happy/Joyful", fontface = "bold") +
+  annotate('text', 1.75 / 2, 0.05, label = "Chill/Peaceful", fontface =
+             "bold") +
+  annotate('text', 0.25 / 2, 0.05, label = "Sad/Depressing", fontface =
+             "bold")
+
+ggplotly(p)
+```
+
+
+
+
+# Conclusione
+
+attività di ascolto completamente cambiata dalla quarantena in poi, rifletteva un po il mood di quel momento (lana's songs non sono assolutamente gioise)
