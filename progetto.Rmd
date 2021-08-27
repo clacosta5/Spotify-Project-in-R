@@ -88,11 +88,6 @@ access_token <- get_spotify_access_token()
 ```{r lettura dataset e cambio nel giusto orario}
 #lettura dataset
 
-#GUIDE
-#https://towardsdatascience.com/explore-your-activity-on-spotify-with-r-and-spotifyr-how-to-analyze-and-visualize-your-stream-dee41cb63526
-#https://rpubs.com/womeimingzi11/how_my_spotify_looks_like
-
-
 streamHistory <- fromJSON("spotify_data/StreamingHistoryTotal.json", flatten = TRUE)
 myLibrary <- fromJSON("spotify_data/secondRequest/YourLibrary.json", flatten = TRUE)
 
@@ -281,7 +276,7 @@ ggplotly(oreArtistaDue)
 
 ```
 
-Da notare come i miei gusti musicali in fatto di artisti sia completamente cambiato dopo la prima quarantena del 2020! Gli artisti che ascoltavo prima ora li ascolto poco e niente, uguale per quelli che ascolto ora.
+Vedendo questi grafici si può sottolineare come i miei gusti musicali in fatto di artisti sia completamente cambiato dopo la prima quarantena del 2020! Gli artisti che ascoltavo tanto prima ora li ascolto di meno.
 
 
 # Attività di ascolto per data e ora del giorno
@@ -332,7 +327,7 @@ timeDayDue
 #primo periodo
 hoursDayUno = mySpotify_2 %>%
   filter(date <= "2020-03-24") %>%
-  group_by(date, ora = hour(endTime), weekday = wday(date, label = TRUE))%>% #wday visual weekday as a string
+  group_by(date, ora = hour(endTime), weekday = wday(date, label = TRUE))%>% #wday mi trova il giorno della settimana della data che gli passo, label true per averlo come stringa e non numero
   summarize(minutiAscoltati = sum(minutes))%>% 
   ggplot(aes(x = ora, y = minutiAscoltati, group = date)) +
   geom_col(fill = "#66b2ff") +
@@ -348,7 +343,7 @@ hoursDayUno
 #secondo periodo
 hoursDayDue <- mySpotify_2 %>%
   filter(date >= "2020-03-25") %>%
-  group_by(date, ora = hour(endTime), weekday = wday(date, label = TRUE))%>% #wday visual weekday as a string
+  group_by(date, ora = hour(endTime), weekday = wday(date, label = TRUE))%>% #wday mi trova il giorno della settimana della data che gli passo, label true per averlo come stringa e non numero
   summarize(minutiAscoltati = sum(minutes), oreAscoltate = minutiAscoltati/60) %>% 
   ggplot(aes(x = ora, y = minutiAscoltati, group = date, text = paste("ora: ", ora, "<br>", "minuti ascoltati: ", round(minutiAscoltati, digits = 1), "<br>", "ore ascoltate: ", round(oreAscoltate, digits = 0)))) +
   geom_col(fill = "#66b2ff") +
@@ -449,7 +444,7 @@ lessDue
 ```
 
 
-È pazzesco come la linea tracciata sia simile per tutti i giorni della settimana e come il picco delle 7 di mattina sia scomparso; non andando più a scuola per via della quarantena non utilizzavo Spotify di prima mattina.
+Mi sono sorpresa del fatto che la linea tracciata sia simile per tutti i giorni della settimana e come il picco delle 7 di mattina sia scomparso.
 
 # Quali sono le canzoni che ho ascoltato più volte dall'inizio? (>= 80 riproduzioni)
 
