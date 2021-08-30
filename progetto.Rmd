@@ -71,11 +71,10 @@ library(formattable)
 library(genius)
 library(fmsb)
 # carico get spotify authorization
-# ESTABLISH CONNECTION SPOTIFY API
+# stabilisco connessione con Spotify API
 id = "00f22c2d4c35499bb29854c73ffdff97"
 id_secret = "46d59a3db5514cdd93c1de05365e57c8"
-#idVale = "bebf67dce2c54886b1171591e84eeb4b"
-#id_secretVale = "f7bdc08240ca4cacbe576181d472c2f8"
+
 Sys.setenv(SPOTIFY_CLIENT_ID = id)
 Sys.setenv(SPOTIFY_CLIENT_SECRET = id_secret)
 get_spotify_authorization_code()
@@ -88,7 +87,7 @@ access_token <- get_spotify_access_token()
 ```{r lettura dataset e cambio nel giusto orario}
 #lettura dataset
 
-streamHistory <- fromJSON("spotify_data/StreamingHistoryTotal.json", flatten = TRUE)
+#streamHistory <- fromJSON("spotify_data/StreamingHistoryTotal.json", flatten = TRUE)
 myLibrary <- fromJSON("spotify_data/secondRequest/YourLibrary.json", flatten = TRUE)
 
 complete <- fromJSON("spotify_data/complete.json", flatten = TRUE)
@@ -96,10 +95,10 @@ savedTracks <- myLibrary$tracks
 
 # cambiare ora!!! perchè orario di greenwitch
 #tz = a character string that specifies which time zone to parse the date with. The string must be a time zone that is #recognized by the user's OS.
-a <- ymd_hm(streamHistory$endTime, tz = "Etc/GMT+0")
+#a <- ymd_hm(streamHistory$endTime, tz = "Etc/GMT+0")
 #cambio l'orario con quello del fuso di Roma
-streamHistory2 <- streamHistory %>%
-  mutate(endTime = with_tz(a, "Europe/Rome"))
+#streamHistory2 <- streamHistory %>%
+#  mutate(endTime = with_tz(a, "Europe/Rome"))
 
 a <- ymd_hms(complete$ts, tz = "Etc/GMT+0")
 #cambio l'orario con quello del fuso di Roma
@@ -107,6 +106,7 @@ complete <- complete %>%
   mutate(ts = with_tz(a, "Europe/Rome")) %>%
   arrange(ts)
   
+#cambio i nomi alle colonne/variabili
 complete <- complete %>%
   rename(endTime = ts) %>%
   rename(artistName = master_metadata_album_artist_name) %>%
@@ -114,6 +114,7 @@ complete <- complete %>%
   rename(msPlayed = ms_played) %>%
   rename(albumName = master_metadata_album_album_name)
 
+#nuovo df con solo le colonne interessate, in ordine crescente di riproduzione
 completeTot <- complete %>%
   select(endTime, artistName, trackName, albumName, msPlayed) %>%
   arrange(endTime)
@@ -129,20 +130,21 @@ completeTot <- complete %>%
 ## In quali date ho ascoltato più o meno musica su Spotify?
 
 ```{r ascolto per date primo periodo}
-# ADDING DATE AND TIMING
-# prova con i secondi
-mySpotify = streamHistory2 %>% 
-  as_tibble() %>% #as_tibble() turns an existing object, such as a data frame or matrix, into a so-called tibble
-  mutate_at("endTime", ymd_hms) %>%  #aggiungo i secondi, cambio solo la colonna che si chiama "endTIme"
-  mutate(date = floor_date(endTime, "day") %>% as_date, seconds = msPlayed / 1000, minutes = seconds / 60) %>%
-  mutate(artistName = str_replace(artistName, "Sasha Sloan", "Sasha Alex Sloan"))
-# date -> prendo la data e basta senza orario, ricavo secondi e minuti suonati
-# floor_date prende un oggetto data-ora e lo arrotonda per difetto al valore intero più vicino dell'unità di tempo        specificata, nel mio caso per giorno
+#mySpotify = streamHistory2 %>% 
+#  as_tibble() %>% #as_tibble() turns an existing object, such as a data frame or matrix, into a so-called tibble
+#  mutate_at("endTime", ymd_hms) %>%  #aggiungo i secondi, cambio solo la colonna che si chiama "endTIme"
+#  mutate(date = floor_date(endTime, "day") %>% as_date, seconds = msPlayed / 1000, minutes = seconds / 60) %>%
+#  mutate(artistName = str_replace(artistName, "Sasha Sloan", "Sasha Alex Sloan"))
+
 
 mySpotify_2 = completeTot %>% 
   as_tibble() %>% #as_tibble() turns an existing object, such as a data frame or matrix, into a so-called tibble
   mutate_at("endTime", ymd_hms) %>%  #aggiungo i secondi, cambio solo la colonna che si chiama "endTIme"
-  mutate(date = floor_date(endTime, "day") %>% as_date, seconds = msPlayed / 1000, minutes = seconds / 60)
+  mutate(date = floor_date(endTime, "day") %>% as_date, 
+         seconds = msPlayed / 1000, 
+         minutes = seconds / 60)
+# date -> prendo la data e basta senza orario, ricavo secondi e minuti suonati
+# floor_date prende un oggetto data-ora e lo arrotonda per difetto al valore intero più vicino dell'unità di tempo        specificata, nel mio caso per giorno
 
 #primo periodo
 oreStreamingUno = mySpotify_2 %>% 
@@ -155,7 +157,7 @@ oreStreamingUno = mySpotify_2 %>%
   ggplot(aes(x = date, y = ore)) + 
   geom_col(aes(fill = ore)) +
   scale_fill_gradient(low = "blue", high = "red") + 
-  ylim(0, 45)+
+  ylim(0, 45)+ #limite di 45 cosi vedo bene la differenza con l'altro periodo
   labs(x= "data", y= "ore di ascolto") + 
   ggtitle("Attività di ascolto per settimana da marzo 2018 a marzo 2020 - primo periodo")
 
@@ -205,7 +207,7 @@ orePiuAscoltateUno <- mySpotify_2 %>%
   scale_fill_gradient(low = "blue", high = "red") + 
   labs(x= "artista", y= "ore di ascolto") + 
   ggtitle("Quali sono i miei artisti più ascoltati? (> 15 ore di ascolto) - primo periodo") +
-  theme(axis.text.x = element_text(angle = 90))
+  theme(axis.text.x = element_text(angle = 90)) #metto le label in verticale cosi leggo tutto bene
 
 ggplotly(orePiuAscoltateUno, tooltip=c("text"))
 ```
@@ -345,7 +347,7 @@ hoursDayDue <- mySpotify_2 %>%
   filter(date >= "2020-03-25") %>%
   group_by(date, ora = hour(endTime), weekday = wday(date, label = TRUE))%>% #wday mi trova il giorno della settimana della data che gli passo, label true per averlo come stringa e non numero
   summarize(minutiAscoltati = sum(minutes), oreAscoltate = minutiAscoltati/60) %>% 
-  ggplot(aes(x = ora, y = minutiAscoltati, group = date, text = paste("ora: ", ora, "<br>", "minuti ascoltati: ", round(minutiAscoltati, digits = 1), "<br>", "ore ascoltate: ", round(oreAscoltate, digits = 0)))) +
+  ggplot(aes(x = ora, y = minutiAscoltati, group = date)) +
   geom_col(fill = "#66b2ff") +
   labs(x= "Ora del giorno", y= "Minuti di ascolto") + 
   ggtitle("Attività da 0 a 23h - secondo periodo")
@@ -370,8 +372,8 @@ giornoUno <- mySpotify_2 %>% # per ogni giorno vedo quanti minuti ho ascoltato e
   summarize(minutesListened = sum(minutes))
 
 asd <- giornoUno %>% 
-  group_by(weekday, hour) %>% 
-  summarize(minutes = sum(minutesListened)) %>% 
+  group_by(weekday, hour) %>% #raggruppo per giorno della settimana e ora
+  summarize(minutes = sum(minutesListened)) %>% #sommo i minuti ascoltati
   ggplot(aes(x = hour, weekday, fill = minutes)) + 
   geom_tile() + 
   scale_fill_gradient(low = "green", high = "blue") +
@@ -391,8 +393,8 @@ giornoDue <- mySpotify_2 %>% # per ogni giorno vedo quanti minuti ho ascoltato e
   summarize(minutesListened = sum(minutes))
 
 asdf <- giornoDue %>% 
-  group_by(weekday, hour) %>% 
-  summarize(minutes = sum(minutesListened)) %>% 
+  group_by(weekday, hour) %>% #raggruppo per giorno della settimana e ora
+  summarize(minutes = sum(minutesListened)) %>% #sommo i minuti ascoltati
   ggplot(aes(x = hour, weekday, fill = minutes)) + 
   geom_tile() + 
   scale_fill_gradient(low = "green", high = "blue") +
@@ -474,10 +476,11 @@ canzoniPiuAscoltate <- mostStreamedSongs %>%
   ggplot(aes(x = reorder(trackName, -n), y = n, fill = artistName, text = paste("track Name: ", trackName, "<br>", "artist: ", artistName, "<br>", "n: ", n))) +
   geom_col() +
   ggtitle("Le mie canzoni più ascoltate dall'inizio! (> 80 volte)")+
-  theme(axis.text.x = element_blank())+
+  theme(axis.text.x = element_blank())+ #tolgo nome brano da asse x
   labs(x= "tracce", y= "tot. riproduzioni")
 
-
+#The unofficial text aesthetic allows you to introduce all the variables you want
+#At last I choose what I want to show in the tooltip
 ggplotly(canzoniPiuAscoltate, tooltip=c("text"))
 ```
 La canzone che ho ascoltato di più in assoluto è Eastside di Halsey e Khalid, l'ho riprodotta per ben 249 volte!
@@ -530,15 +533,12 @@ plotMyFavs <- topArtistFromSavedTracks %>%
       between(n, 20, 49) ~ '20-49 brani',
       TRUE ~ '< 20 brani')) %>%
   mutate(freq = factor(freq, levels = c('> 100 brani', '50-99 brani', '20-49 brani', '< 20 brani'))) %>%
-  ggplot(mapping = aes(x = reorder(artist, -n), y = n, fill = freq, , text = paste("artista: ", artist, "<br>", "n canzoni : ", n))) +
+  ggplot(mapping = aes(x = reorder(artist, -n), y = n, fill = freq, text = paste("artista: ", artist, "<br>", "n canzoni : ", n))) +
   geom_col() +
   scale_fill_manual(values=c(green, yellow, pink, blue)) +
-  labs(x= "Artista", y= "Numero di canzoni", fill = NULL) +
+  labs(x= "Artista", y= "Numero di canzoni") +
   ggtitle("Artisti con più brani salvati nella libreria") +
-  theme(axis.text.x = element_text(angle = -60),
-        axis.title = element_text(face = 'bold'),
-        plot.title = element_text(hjust = 0.5, face = 'bold', size = 15),
-        plot.caption = element_text(hjust = 1,face = 'bold.italic'))
+  theme(axis.text.x = element_text(angle = -60))
 ggplotly(plotMyFavs, tooltip=c("text"))
 #taylor complete collection: 267 brani
 #lana complete collection: 107 brani
@@ -552,7 +552,7 @@ ggplotly(plotMyFavs, tooltip=c("text"))
 
 ```{r ultime five canzoni}
 get_my_recently_played(limit = 5) %>% 
-    mutate(artist.name = map_chr(track.artists, function(x) x$name[1]),
+    mutate(artist.name = map_chr(track.artists, function(x) x$name[1]), #map_chr da vettore di caratteri, prendo solo il primo
            played_at = as_datetime(played_at)) %>% 
     select(track.name, artist.name, track.album.name, played_at) %>% 
     kable() #funzione di knitr per creare tabelle
@@ -579,8 +579,6 @@ shortTermA <- read.csv("shortTermArtists.csv")
 shortTermA <- as_tibble(shortTermA)
 shortTermA
 
-#shortTermArtists<-shortTermArtists[!(shortTermArtists$name=="Halsey" | shortTermArtists$name=="Anne-Marie" | shortTermArtists$name=="Demi Lovato"),]
-
 ```
 
 
@@ -596,10 +594,10 @@ favArtist6 <- get_artist_audio_features(artist= "Avril Lavigne")
 favArtist7 <- get_artist_audio_features(artist= "Chase Atlantic", include_groups = c("album", "single"))
 favArtist8 <- get_artist_audio_features(artist= "HAIM")
 
-#favArtist3 <- get_artist_audio_features(artist= "Demi Lovato")
+#per certi includo anche i singoli e le canzoni in cui compaiono
 
 
-#CAMBIARE E TOGLIERE GLI ALBUM INUTILI!!! TENERE SOLO QUELLI IMPORTANTI
+#CAMBIARE E TOGLIERE GLI ALBUM INUTILI!!! TENERE SOLO QUELLI IMPORTANTI -> seleziono quelli che mi interessano con which in c(nomi album)
 #prendo solo gli album utili per tay
 favArtist1 <- favArtist1[which(favArtist1$album_name %in% c("1989 (Deluxe)","evermore (deluxe version)", "Fearless (Platinum Edition)", "Fearless (Taylor's Version)", "folklore (deluxe version)", "Lover", "Red (Deluxe Edition)", "reputation", "Speak Now (Deluxe Package)", "Taylor Swift")),]
 
@@ -655,16 +653,16 @@ favArtist8 <- favArtist8 %>%
   distinct(track_name, .keep_all = TRUE)
 
 
-# creo un unico df
-topFiveArtists <- rbind(favArtist1, favArtist2, favArtist3, favArtist4, favArtist5, favArtist6, favArtist7, favArtist8)
+#creo un unico df
+topArtists <- rbind(favArtist1, favArtist2, favArtist3, favArtist4, favArtist5, favArtist6, favArtist7, favArtist8)
 
-quadranteEmotivo <- ggplot(data = topFiveArtists, aes(x = valence, y = energy, color = artist_name)) +
-  geom_jitter(aes(text = track_name)) +
+quadranteEmotivo <- ggplot(data = topArtists, aes(x = valence, y = energy, color = artist_name)) +
+  geom_jitter(aes(text = track_name)) + #jitter e non point per evitare sovrastampa di punti nel grafico
   geom_vline(xintercept = 0.5) + #righe per dividere in 4
   geom_hline(yintercept = 0.5) +
   scale_x_continuous(expand = c(0, 0), limits = c(0, 1)) + # limits limita i valori sugli assi da 0 a 1
   scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) + # expand centra gli assi del grafico sull'origine
-  annotate('text', 0.17, 0.95, label = "Energetico/Arrabbiato", fontface = "bold") +
+  annotate('text', 0.17, 0.95, label = "Energetico/Arrabbiato", fontface = "bold") + #per scrivere i 4 testi negli angoli
   annotate('text', 1.75 / 2, 0.95, label = "Energetico/Felice", fontface = "bold") +
   annotate('text', 0.865, 0.05, label = "Pacifico/Tranquillo", fontface = "bold") +
   annotate('text', 0.13, 0.05, label = "Triste/Lento", fontface = "bold") +
@@ -706,7 +704,7 @@ genereShort$pop.rap = 0          #14
 genereShort$RandB = 0            #15
 genereShort$punk = 0             #16
 
-# assegno ad ogni artista il genere esatto
+# assegno ad ogni artista il genere esatto, cosi poi conto
 #Tay
 genereShort[1,5] = 1
 genereShort[1,6] = 1
