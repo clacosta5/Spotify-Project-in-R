@@ -2,4 +2,4 @@
 
 Exploring my Spotify activity with streaming history.
 
-Exploring my Spotify account and data with 'spotifyr'.
+Exploring my Spotify account and data with Spotify API and 'spotifyr'.
