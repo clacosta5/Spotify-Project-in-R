@@ -515,7 +515,7 @@ savedTracks = savedTracks %>%
 ## Artisti con più brani salvati nella libreria
 
 ```{r top artisti}
-topArtistFromSavedTracks = savedTracks %>%
+artistiConPiuBrani = savedTracks %>%
   group_by(artist) %>%
   count(artist) %>%
   arrange(-n)
@@ -525,21 +525,22 @@ yellow <- "#e7e247"
 pink <- "#ff6f59"
 blue <- "#17bebb"
   
-  # top artisti basato sulle canzoni salvate
-plotMyFavs <- topArtistFromSavedTracks %>%
+#fattori vengono utilizzati per lavorare con variabili categoriali, variabili che hanno un insieme fisso e noto di possibili valori.
+  # artisti con piu brani nella libreria
+plotartistiConPiuBrani <- artistiConPiuBrani %>%
   filter(n >= 11) %>%
-  mutate(freq = case_when(n > 100 ~ '> 100 brani',
+  mutate(freq = case_when(n > 100 ~ '> 100 brani', #qui credo i 4 livelli
       between(n, 50, 99) ~ '50-99 brani',
       between(n, 20, 49) ~ '20-49 brani',
-      TRUE ~ '< 20 brani')) %>%
-  mutate(freq = factor(freq, levels = c('> 100 brani', '50-99 brani', '20-49 brani', '< 20 brani'))) %>%
+      TRUE ~ '< 20 brani')) %>% #creo un factor, lo divido nei 4 livelli visto che n può assumere 4 livelli diversi
+  mutate(freq = factor(freq, levels = c('> 100 brani', '50-99 brani', '20-49 brani', '< 20 brani'))) %>% #assegno il giusto livello
   ggplot(mapping = aes(x = reorder(artist, -n), y = n, fill = freq, text = paste("artista: ", artist, "<br>", "n canzoni : ", n))) +
   geom_col() +
   scale_fill_manual(values=c(green, yellow, pink, blue)) +
   labs(x= "Artista", y= "Numero di canzoni") +
   ggtitle("Artisti con più brani salvati nella libreria") +
   theme(axis.text.x = element_text(angle = -60))
-ggplotly(plotMyFavs, tooltip=c("text"))
+ggplotly(plotartistiConPiuBrani, tooltip=c("text"))
 #taylor complete collection: 267 brani
 #lana complete collection: 107 brani
 ```
