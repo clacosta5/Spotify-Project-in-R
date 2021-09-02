@@ -599,7 +599,7 @@ favArtist8 <- get_artist_audio_features(artist= "HAIM")
 
 
 #CAMBIARE E TOGLIERE GLI ALBUM INUTILI!!! TENERE SOLO QUELLI IMPORTANTI -> seleziono quelli che mi interessano con which in c(nomi album)
-#prendo solo gli album utili per tay
+#prendo solo gli album utili per tay, tolgo le release in piu tipo gli speciali o gli ep
 favArtist1 <- favArtist1[which(favArtist1$album_name %in% c("1989 (Deluxe)","evermore (deluxe version)", "Fearless (Platinum Edition)", "Fearless (Taylor's Version)", "folklore (deluxe version)", "Lover", "Red (Deluxe Edition)", "reputation", "Speak Now (Deluxe Package)", "Taylor Swift")),]
 
 #prendo le canzoni uniche, non ripetute
